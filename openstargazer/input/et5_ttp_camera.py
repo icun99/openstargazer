@@ -57,6 +57,7 @@ class Et5TtpCameraSource(InputSource):
         self._latest_frame = TrackingFrame.invalid()
         self._latest_frame_at: float | None = None
         self._reconnect_task = None
+        self._mirror = None
 
         self._model = None
         self._model_error: str | None = None
@@ -109,6 +110,9 @@ class Et5TtpCameraSource(InputSource):
     async def start(self) -> None:
         self._shutdown = False
         self._load_model()
+        if self._settings is not None and self._settings.input.et5_camera.v4l2_mirror:
+            from openstargazer.native.v4l2_sink import V4l2Sink
+            self._mirror = V4l2Sink(self._settings.input.et5_camera.v4l2_mirror)
         if not await self._connect():
             log.warning("ET5 not reachable, retrying in the background")
         self._reconnect_task = asyncio.ensure_future(self._reconnect_watch())
@@ -119,6 +123,8 @@ class Et5TtpCameraSource(InputSource):
             self._reconnect_task.cancel()
             self._reconnect_task = None
         self._disconnect()
+        if self._mirror is not None:
+            self._mirror.close()
 
     async def pause_tracking(self) -> None:
         self._paused = True
@@ -315,16 +321,19 @@ class Et5TtpCameraSource(InputSource):
 
             if frame.header.op == CAMERA_STREAM:
                 camera_counter += 1
-                if self._model is None:
+                if self._model is None and self._mirror is None:
                     continue
                 try:
                     picture = camera_frame.parse_camera_notification(frame.payload)
                 except ProtocolError:
                     continue
                 pixels = np.frombuffer(picture.pixels, dtype=np.uint8)
-                self._pending_picture = pixels.reshape(picture.height,
-                                                       picture.width).copy()
-                self._picture_ready.set()
+                pixels = pixels.reshape(picture.height, picture.width)
+                if self._mirror is not None:
+                    self._mirror.write(pixels)
+                if self._model is not None:
+                    self._pending_picture = pixels.copy()
+                    self._picture_ready.set()
                 continue
 
             if frame.header.op != ttp.STREAM_ID_GAZE:

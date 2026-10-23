@@ -89,6 +89,7 @@ class DeviceConfig:
 @dataclass
 class Et5CameraInputConfig:
     model_path: str = ""
+    v4l2_mirror: str = ""
 
 
 @dataclass
@@ -359,6 +360,7 @@ class Settings:
             cam = inp.get("et5_camera")
             if isinstance(cam, dict):
                 self.input.et5_camera.model_path = cam.get("model_path", "")
+                self.input.et5_camera.v4l2_mirror = cam.get("v4l2_mirror", "")
 
             cam_ui = inp.get("webcam")
             if isinstance(cam_ui, dict):
@@ -508,6 +510,7 @@ class Settings:
             "",
             f"[input.et5_camera]",
             f'model_path = "{self.input.et5_camera.model_path}"',
+            f'v4l2_mirror = "{self.input.et5_camera.v4l2_mirror}"',
             "",
             f"[input.webcam]",
             f"device_index = {self.input.webcam.device_index}",
